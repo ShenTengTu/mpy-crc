@@ -59,10 +59,35 @@ class MPY_CRC:
         return _CRC.check(data)
         
     class _CRC32:
-        @staticmethod
-        def update(data):
-            __data = MPY_CRC._valid_inputs(data)
-            return 0x01
+        """
+        Standard CRC-32 (IEEE 802.3)
+
+        polynomial :
+        x^32 + x^26 + x^23 + x^22 + x^16 + x^12 + x^11 + x^10 + x^8 + x^7 + x^5 + x^4 + x^2 + x + 1
+        """
+        max_crc = 0xffffffff
+
+        @classmethod
+        def update(clz, data, pre_crc=0x00000000):
+            __data = data
+            _crc = pre_crc
+            for byte in __data:
+                _crc = crc32(bytearray([byte]), _crc) & clz.max_crc
+            return _crc
+        
+        @classmethod
+        def check(clz, data):
+            __data = data
+            __crc = crc32(__data) & clz.max_crc
+            return __crc == clz.max_crc
+            
+        @classmethod
+        def encode(clz, data):
+            __crc = clz.update(data)
+            __inverse_crc = clz.max_crc - __crc
+            __data = bytearray(data)
+            __data.extend(__inverse_crc.to_bytes(4, byteorder))
+            return bytes(__data)
     
     class _CRC8:
         """
@@ -71,10 +96,10 @@ class MPY_CRC:
         polynomial: X^8 + X^5 + X^4 + 1
         """
         @staticmethod
-        def update(data, pre_crc):
+        def update(data, pre_crc=0x00):
             __data = MPY_CRC._valid_inputs(data)
             _crc = pre_crc
-            for byte in data:
+            for byte in __data:
                 _crc = crc8(bytearray([_crc^byte]))
             return _crc
         
@@ -86,7 +111,7 @@ class MPY_CRC:
             
         @classmethod
         def encode(clz, data):
-            __crc = clz.update(data, 0x00)
+            __crc = clz.update(data)
             __data = bytearray(data)
             __data.extend(__crc.to_bytes(1, byteorder))
             return bytes(__data)
@@ -125,6 +150,11 @@ class MPY_CRC:
 
         return : `bytes`
         """
-        return bytes([self._crc])
+        __crc = self._crc
+        bit_length = len(bin(__crc)) - 2
+        byte_length, r = divmod(bit_length, 8)
+        if r != 0:
+            byte_length += 1
+        return __crc.to_bytes(byte_length, byteorder)
 
 __all__ = ['MPY_CRC']
